@@ -1,8 +1,53 @@
 "use client";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { RoundedBox, useTexture } from "@react-three/drei";
-import { useRef, useLayoutEffect, Suspense } from "react";
+import { useRef, useEffect, useLayoutEffect, Suspense } from "react";
 import { Group, InstancedMesh, Object3D, SRGBColorSpace } from "three";
+// Slow, ornamental motion needs fewer frames than a game. Demand rendering keeps
+// the main thread free for scrolling and controls and stops work in hidden tabs.
+function AnimationBudget() {
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    let timer: number;
+    const tick = () => {
+      if (!document.hidden) invalidate();
+      timer = window.setTimeout(tick, 1000 / 30);
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [invalidate]);
+  return null;
+}
+function OrbitNodes() {
+  const nodes = useRef<InstancedMesh>(null);
+  useLayoutEffect(() => {
+    if (!nodes.current) return;
+    const instance = new Object3D();
+    for (let i = 0; i < 8; i++) {
+      const angle = (i * Math.PI) / 4;
+      instance.position.set(
+        Math.cos(angle) * 1.47,
+        Math.sin(angle) * 0.55,
+        Math.sin(angle) * 1.35,
+      );
+      instance.updateMatrix();
+      nodes.current.setMatrixAt(i, instance.matrix);
+    }
+    nodes.current.instanceMatrix.needsUpdate = true;
+  }, []);
+  return (
+    <instancedMesh ref={nodes} args={[undefined, undefined, 8]}>
+      <sphereGeometry args={[0.055, 12, 12]} />
+      <meshStandardMaterial
+        color="#8294ff"
+        emissive="#647bff"
+        emissiveIntensity={0.5}
+        metalness={0.7}
+        roughness={0.3}
+      />
+    </instancedMesh>
+  );
+}
 function Sculpture() {
   const group = useRef<Group>(null);
   useFrame((state, delta) => {
@@ -41,44 +86,27 @@ function Sculpture() {
       </mesh>
       <mesh rotation={[0.45, 0.3, 0.3]}>
         <octahedronGeometry args={[0.62, 0]} />
-        <meshPhysicalMaterial
+        <meshStandardMaterial
           color="#8697ff"
           metalness={0.45}
           roughness={0.14}
-          clearcoat={1}
         />
       </mesh>
-      {Array.from({ length: 8 }, (_, i) => (
-        <mesh
-          key={i}
-          position={[
-            Math.cos((i * Math.PI) / 4) * 1.47,
-            Math.sin((i * Math.PI) / 4) * 0.55,
-            Math.sin((i * Math.PI) / 4) * 1.35,
-          ]}
-        >
-          <sphereGeometry args={[0.055, 12, 12]} />
-          <meshStandardMaterial
-            color="#8294ff"
-            emissive="#647bff"
-            emissiveIntensity={0.5}
-            metalness={0.7}
-            roughness={0.3}
-          />
-        </mesh>
-      ))}
+      <OrbitNodes />
     </group>
   );
 }
 export function HeroScene() {
   return (
     <Canvas
-      dpr={[1, 1.4]}
+      dpr={1}
+      frameloop="demand"
       camera={{ position: [0, 0, 5.2], fov: 42 }}
       gl={{ alpha: true, antialias: true, powerPreference: "low-power" }}
       role="img"
       aria-label="Interactive orbital engineering sculpture"
     >
+      <AnimationBudget />
       <ambientLight intensity={1.5} />
       <directionalLight position={[3, 5, 3]} intensity={4} color="#ffffff" />
       <directionalLight position={[-4, 0, 2]} intensity={3} color="#647bff" />
@@ -173,12 +201,14 @@ function Device({ src }: { src: string }) {
 export function DeviceScene({ src }: { src: string }) {
   return (
     <Canvas
-      dpr={[1, 1.4]}
+      dpr={1}
+      frameloop="demand"
       camera={{ position: [0, 0.4, 5.8], fov: 40 }}
       gl={{ alpha: true, antialias: true, powerPreference: "low-power" }}
       role="img"
       aria-label="Interactive 3D laptop showing an authentic project screenshot"
     >
+      <AnimationBudget />
       <ambientLight intensity={2} />
       <directionalLight position={[4, 5, 4]} intensity={4} />
       <directionalLight position={[-3, 1, 1]} intensity={2} color="#8899ff" />
